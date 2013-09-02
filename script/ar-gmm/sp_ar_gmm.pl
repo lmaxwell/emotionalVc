@@ -371,9 +371,9 @@ if ($preTrain)
 				system("cat $jointFile.$i-ar.temp $dtwFile-$i > $jointFile.$i-ar");
 				#	system("rm -f $jointFile.tmp $jointFile-ar.tmp $dtwFile");
 			}
+			system("$SPTK36/vstat -l 48 -d -o 2 $dtwFile-0 >> $gvFile");
 		}
 
-		system("$SPTK36/vstat -l 48 -d -o 2 $dtwFile-0 >> $gvFile");
 		$index+=1;
 
 	}
