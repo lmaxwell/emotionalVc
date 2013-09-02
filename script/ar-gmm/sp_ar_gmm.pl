@@ -285,13 +285,14 @@ if ($preTrain)
 	mkdir "$workDir/dtw",0755;
 	mkdir "$workDir/dtw/$numMix-mix",0755;
 	mkdir "$workDir/dtw/$numMix-mix/$src",0755;
-	system("rm -f $workDir/dtw/$numMix-mix/$src/*");
+	#system("rm -f $workDir/dtw/$numMix-mix/$src/*");
 	my @trainFiles=`cat $trgList`;
 	chomp @trainFiles;
 	#print $_ for (@trainFiles);
 	my $index=0;
 	my $jointFile="$workDir/dtw/$numMix-mix/$src-$trg.mat";
-
+    my $gvFile="$workDir/dtw/$numMix-mix/$src-$trg.gvtemp";
+    my $gvModel="$workDir/ar-gmm/$numMix-mix/gvModel";
 	my $seg_markFile="$workDir/dtw/$numMix-mix/seg_mark";
 	my @seg_mark;
 	for my $i(1..48)
@@ -319,7 +320,7 @@ if ($preTrain)
 		system("$SPTK/x2x +df $srcFile >$srcFile.f");
 		system("$SPTK/x2x +df $trgFile >$trgFile.f");
 		system("$SPTK36/dtw -l 24 -p 2 $trgFile.f $srcFile.f -v $viterbiFile -s $scoreFile >>$dtwFile");
-		system("$prjDir/script/ar-gmm/ar-gmmC/extract -l 24 -o $order -t -100.0  $viterbiFile $srcFile.f $trgFile.f $srcPow.f $trgPow.f $dtwFile");
+			system("$prjDir/script/ar-gmm/ar-gmmC/extract -l 24 -o $order -t -100.0  $viterbiFile $srcFile.f $trgFile.f $srcPow.f $trgPow.f $dtwFile");
 		system("cat $scoreFile >>$jointFile.melCD") unless(-z $scoreFile);
 #				
 #		for my $i(0..$order)
@@ -343,7 +344,7 @@ if ($preTrain)
 			system("cat $seg_markFile $dtwFile-$i > $jointFile.$i-ar");
 			}
 			system("cat $seg_markFile $jointFile > $jointFile-ar");
-
+			system("$SPTK36/vstat -l 48 -d -o 2 $dtwFile-0 > $gvFile");
 		}
 		else
 		{
@@ -371,13 +372,14 @@ if ($preTrain)
 				#	system("rm -f $jointFile.tmp $jointFile-ar.tmp $dtwFile");
 			}
 		}
+
+		system("$SPTK36/vstat -l 48 -d -o 2 $dtwFile-0 >> $gvFile");
 		$index+=1;
 
 	}
 	system("$SPTK36/vstat $jointFile.melCD |x2x +fa >>$jointFile.melCDavg ");
 	system("$SPTK/x2x +fa48 $jointFile-ar >$jointFile-ar.txt");
 	system("$SPTK/x2x +fd $jointFile >$jointFile.f");
-	
 	#system("$SPTK36/vstart -l 48 -o 1  $jointFile > $workDir/dtw/$numMix-mix/mcepVMean");
 	 
 	for my $i (0..$order)
@@ -388,6 +390,7 @@ if ($preTrain)
 
 	mkdir "$workDir/ar-gmm",0755;
 	mkdir "$workDir/ar-gmm/$numMix-mix",0755;
+	system("$SPTK36/vstat -d -l 48 -o 0 $gvFile > $gvModel");
 	system("$SPTK/gmm -m 64 -l 48 -b 5 $jointFile >$workDir/ar-gmm/$numMix-mix/initmodel");
 }
 if($doTrain)

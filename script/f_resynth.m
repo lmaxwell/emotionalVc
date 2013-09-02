@@ -8,8 +8,8 @@ addpath('/home/lixian/speech/MatlabCode/STRAIGHT/TandemSTRAIGHTmonolithicPackage
 %   Please use this in "cell mode"
 
 %%  Initialize conditions
-
-directoryBase = [pwd '/neutral/'];
+file=201;
+directoryBase = [pwd '/../neutral/'];
 fileName = ['wav/' num2str(file) '.wav'];
 
 noisy = 0; % If the speech material consists of low frequency noise, set this vaviable 1;
@@ -72,12 +72,13 @@ maxLevel = max(max(sgramSTRAIGHT));
 % title('STRAIGHT spectrogram')
 
 %% 
-if(strcmp(method,'twotier'))
-temp=load([directoryBase '../test/twotier/' emotion '/'  num2str(file) '.f0.phrase'])'+load([directoryBase '../test/twotier/' emotion '/'  num2str(file) '.f0.tone'])';
-q.f0=exp([temp 0*ones(1,length(r.f0)-length(temp))]);
-end
+% if(strcmp(method,'twotier'))
+% temp=load([directoryBase '../test/twotier/' emotion '/'  num2str(file) '.f0.phrase'])'+load([directoryBase '../test/twotier/' emotion '/'  num2str(file) '.f0.tone'])';
+% q.f0=exp([temp 0*ones(1,length(r.f0)-length(temp))]);
+% end
 %%
-
+q.f0=q.f0*0.99;
+%q.f0=q.f0-2;
 s = exTandemSTRAIGHTsynthNx(q,f)
 sound(s.synthesisOut/max(abs(s.synthesisOut))*0.8,fs) % old implementation
 wavwrite(s.synthesisOut,fs,[directoryBase '../test/twotier/' emotion '/'  num2str(file) '.wav'])

@@ -155,6 +155,19 @@ for iSen=1:numOfSen
         postProb=exp(postProb-sum_postProb);
          accW=accW+postProb;
         liklihoodProb=liklihoodProb+sum_postProb;
+        
+        
+       for iL=1:l/2
+        
+            r=[ reshape(preSegs(:,:),l*order,1) 1  ]';
+            B(:,iL,iMix)=B(:,iL,iMix) + postProb(iMix).*s;
+            for iMix=1:mixNum
+                A(:,:,iL,iMix )= A(:,:,iL,iMix) + postProb(iMix).*s*s';
+               
+            end
+        end
+        
+        
         for iMix=1:mixNum 
            
             for iOd=1:order  

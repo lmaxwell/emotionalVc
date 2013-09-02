@@ -7,7 +7,7 @@ gmmFile=[trainDir '/neutral_' emotion '.tone.gmm'];
 trainFile=[trainDir '/neutral_' emotion '.tone_ar'];
 l=16;
 mixNum=sMix;
-order=3;
+order=1;
 vfloor=0.001;
 addpath('lightspeed');
 %% read gmm model
@@ -108,7 +108,7 @@ vFloor=zeros(l,1);
 for iSen=1:numOfSen
     start=indexOfSen(iSen)+1;
     xend=indexOfSen(iSen+1)-1;
-    fprintf( 1 , '%dth sentence,start:%d,end:%d\n' , iSen , start , xend);
+%    fprintf( 1 , '%dth sentence,start:%d,end:%d\n' , iSen , start , xend);
     for iSeg=0:xend-start
  %       fprintf(1,'%dth segment\n',iSeg);
         %set preSegs

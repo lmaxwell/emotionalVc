@@ -593,12 +593,15 @@ if ($doTrain)
 	system("rm -f $trainDir/neutral.tone.f $trainDir/$emotion.tone.f");
 	my $vectorLength=2*$dctNumOfPhrase;
 
-	system("$SPTK/gmm -b 100 -l $vectorLength -m $mixNum{$emotion}[0]  -f $trainDir/neutral_$emotion.phrase.f >$trainDir/neutral_$emotion.phrase.gmm.f");
+	system("$SPTK/gmm -b 100 -l $vectorLength -m $mixNum{$emotion}[0]   $trainDir/neutral_$emotion.phrase.f >$trainDir/neutral_$emotion.phrase.gmm.f");
 	system("$SPTK/gmm -b 100 -l 16 -m $mixNum{$emotion}[1]   $trainDir/neutral_$emotion.tone.f >$trainDir/neutral_$emotion.tone.gmm.f");
 	system("$SPTK/x2x +fa $trainDir/neutral_$emotion.phrase.gmm.f>$trainDir/neutral_$emotion.phrase.gmm_full");
 	system("$SPTK/x2x +fa $trainDir/neutral_$emotion.tone.gmm.f>$trainDir/neutral_$emotion.tone.gmm");
 	system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -l 16 -m 12 -o $orderP -t 0.01 -v 0.001 -T 0 -N 30 -I $trainDir/neutral_$emotion.tone.gmm.f $trainDir/neutral_$emotion.tone.f_ar $trainDir/neutral_$emotion.tone.gmm_ar_ABfull_order$orderP.f");
 	system("$SPTK/x2x +fa $trainDir/neutral_$emotion.tone.gmm_ar_ABfull_order$orderP.f > $trainDir/neutral_$emotion.tone.gmm_ar_ABfull_order$orderP");
+	
+	system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -l 6 -m 6 -o 1 -t 0.001 -v 0.001 -T 0 -N 30 -I $trainDir/neutral_$emotion.phrase.gmm.f $trainDir/neutral_$emotion.phrase.f_ar $trainDir/neutral_$emotion.phrase.gmm_ar_ABfull.f");
+	system("$SPTK/x2x +fa $trainDir/neutral_$emotion.phrase.gmm_ar_ABfull.f > $trainDir/neutral_$emotion.phrase.gmm_ar_ABfull");
 }    #end il
 
 =a
@@ -787,7 +790,7 @@ if($doResynth)
 			print M "fprintf(fd,\'$text\\n\');\n";
 			print M "x=[@phraseParas]';\n";
 			my $vectorLength=$dctNumOfPhrase*2;
-			print M "predict=gmm_convert(x,$vectorLength,$mixNum{$emotion}[0],\'$trainDir/neutral_$emotion.phrase.gmm_full\');\n";
+			print M "predict=gmm_ar_ABdiag_convert(x,$vectorLength,1,1,$mixNum{$emotion}[0],\'$trainDir/neutral_$emotion.phrase.gmm_ar_ABfull\',\'Bfull\');\n";
 			print M "fprintf(fd,\'%f\\n\',predict);\n";
 			print M "fprintf(fd,\'#\\n\');\n";	
 		}
