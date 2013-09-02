@@ -22,9 +22,9 @@ int main(int argc,char **argv)
 {
 	FILE *findex,*fsrc,*ftrg,*fpowsrc,*fpowtrg,*fjoin;
 	char outFile[10][400];	
-	int l,order,length,i,j,io,lenPowsrc,lenPowtrg;
+	int l,order,length,i,j,io,lenPowsrc,lenPowtrg,srcl,trgl;
 	int *index[2];
-	float thr,*joinData,*powsrc,*powtrg;
+	float thr,*joinData,*powsrc,*powtrg,*src,*trg,*beginZero;
 	while(--argc > 6)
 		if(**++argv=='-')
 			switch(*(*argv+1))
@@ -53,6 +53,20 @@ int main(int argc,char **argv)
    fseek(findex,0L,SEEK_END);
    length=ftell(findex)/sizeof(float)/2;
    fseek(findex,0L,SEEK_SET);
+
+   fseek(fsrc,0L,SEEK_END);
+	 srcl=ftell(fsrc)/sizeof(float);
+	 fseek(fsrc,0L,SEEK_SET);
+   
+	 fseek(ftrg,0L,SEEK_END);
+	 trgl=ftell(ftrg)/sizeof(float);
+	 fseek(ftrg,0L,SEEK_SET);
+   
+	 src=(float *)malloc(sizeof(float)*srcl);
+	 trg=(float *)malloc(sizeof(float)*trgl);
+	 fread(src,sizeof(float),srcl,fsrc);
+	 fread(trg,sizeof(float),trgl,ftrg);
+	
 	//printf("size:%d,length:%d\n",ftell(findex),length);
 	for (i=0;i<2;i++)
 	{
@@ -88,6 +102,7 @@ int main(int argc,char **argv)
 	fclose(fpowtrg);
    char p_order[10];
 
+		beginZero=(float *)calloc(l,sizeof(float));
    for (io=0;io<=order;io++)
    {
    		strcpy(&outFile[io][0],*argv);
@@ -97,7 +112,7 @@ int main(int argc,char **argv)
 
    fjoin=fopen(outFile[io],"wb");
    
-   	joinData=(float *)malloc(sizeof(float)*l*2*length);
+   	//joinData=(float *)malloc(sizeof(float)*l*2*length);
 	for (i=0,j=0;i<length;i++)
 	{
 
@@ -107,24 +122,30 @@ int main(int argc,char **argv)
 			continue;
 		}			
 		if(index[0][i]-io<0)
-			memset(&joinData[j*l*2],0,sizeof(float)*l);
+			//memset(&joinData[j*l*2],0,sizeof(float)*l);
+			fwrite(beginZero,sizeof(float),l,fjoin);
 		else
 		{
-	   		fseek(fsrc,sizeof(float)*(index[0][i]-io)*l,SEEK_SET);
-			fread(&joinData[j*l*2],sizeof(float),l,fsrc);
+	   	//	fseek(fsrc,sizeof(float)*(index[0][i]-io)*l,SEEK_SET);
+			//fread(&joinData[j*l*2],sizeof(float),l,fsrc);
+			//memcpy(&joinData[j*l*2],src+(index[0][i]-io)*l,sizeof(float)*l);
+			fwrite(src+(index[0][i]-io)*l,sizeof(float),l,fjoin);
 		}
 		if(index[1][i]-io<0)
-			memset(&joinData[j*l*2+l],0,sizeof(float)*l);
+			//memset(&joinData[j*l*2+l],0,sizeof(float)*l);
+			fwrite(beginZero,sizeof(float),l,fjoin);
 		else
 		{
-			fseek(ftrg,sizeof(float)*(index[1][i]-io)*l,SEEK_SET);
-			fread(&joinData[j*l*2+l],sizeof(float),l,ftrg);
+			//fseek(ftrg,sizeof(float)*(index[1][i]-io)*l,SEEK_SET);
+			//fread(&joinData[j*l*2+l],sizeof(float),l,ftrg);
+			//memcpy(&joinData[j*l*2+l],trg+(index[1][i]-io)*l,sizeof(float)*l);
+			fwrite(trg+(index[1][i]-io)*l,sizeof(float),l,fjoin);
 		}
 		j++;
 		//exit(0);
 	 }                   
-	fwrite(joinData,sizeof(float),l*2*j,fjoin);
-	free(joinData);
+	//fwrite(joinData,sizeof(float),l*2*j,fjoin);
+	//free(joinData);
 	fclose(fjoin);
    }
 	//for (j=0;j<l*2*length;j++)
@@ -133,9 +154,10 @@ int main(int argc,char **argv)
 // 	free(index);
   free(powsrc);
 	free(powtrg);
+	free(src);
+	free(trg);
+	free(beginZero);
 	fclose(findex);
-	fclose(fpowsrc);
-	fclose(fpowtrg);
 	fclose(fsrc);
 	fclose(ftrg);
 	for (i=0;i<2;i++)
