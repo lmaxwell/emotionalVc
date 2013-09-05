@@ -5,10 +5,12 @@
  *
  *    Description:  
  *    						-m mixture number
- *    						-l dimension
+ *    						-l joint dimension length
  *    						-o order
  *    						-M model file
  *    						-g global variance model file
+ *    						-s step size
+ *    						-i max iteration number
  *    						input  (L/2+1)*T
  *    						output (L/2+1)*T
  *
@@ -595,9 +597,10 @@ int main(int argc,char **argv)
 		}
 
 
-double w1=1.0/(double)order,w2=1.0-w1;
-for(l=0;l<L/2;l++)
-{
+double w1=1.0;///(double)order;
+double w2=1.0;
+//for(l=0;l<L/2;l++)
+//{
 	//likli=cal_likli(T,l,order,&omcep,&cmcep,gmm.gauss,maxMix,&curMiu,&senSta,&gv,postProb,w1,w2);
   //pLikli=likli;
 	for(gvite=0;gvite<ngvite;gvite++)
@@ -657,14 +660,22 @@ for(l=0;l<L/2;l++)
 									{
 										for(iT=0;iT<T;iT++)
 										{
+
+											for(l=0;l<L/2;l++)
+											{
 												cmcep.data[iT][l+1] -= step*preDelta[iT*L/2+l];
+											}
 										}
 
 										step*=0.5;
 
 										for(iT=0;iT<T;iT++)
 										{
+
+											for(l=0;l<L/2;l++)
+											{
 												cmcep.data[iT][l+1] += step*preDelta[iT*L/2+l];
+											}
 										}
 
 													printf("%dth iteration  go back likli:%f vLikli:%f likli+vLikli:%f \n",gvite,likli-vLikli,vLikli,likli);
@@ -676,11 +687,14 @@ for(l=0;l<L/2;l++)
 
 					for(iT=0;iT<T;iT++)
 					{
+
+						for(l=0;l<L/2;l++)
+						{
 							temp=cmcep.data[iT][l+1];
 							curDelta[iT*L/2+l]=(-1*w1/((double)T)/gmm.gauss[maxMix[iT]].var.data[l+L/2]*(temp-curMiu.data[l]) + w2*(-2)/(double)T / gv.var.data[l] *( senSta.var.data[l] - gv.miu.data[l] ) * (temp-senSta.miu.data[l])  );
 							cmcep.data[iT][l+1] += step* curDelta[iT*L/2+l];
 							preDelta[iT*L/2+l] = curDelta[iT*L/2+l];
-
+						}
 //							postprob[m]=gmm.gauss[m].gconst;
 //							for(l=0;l<L/2;l++)
 //							{
@@ -700,7 +714,7 @@ for(l=0;l<L/2;l++)
 
 	}
 
-}
+//} //end for l
 	printf("%s\n",*(argv+1));
 	FILE *fcmcep=fopen(*++argv,"wb");
 	for (iT=0;iT<T;iT++)
