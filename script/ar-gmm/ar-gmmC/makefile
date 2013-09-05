@@ -1,10 +1,10 @@
 INCLUDEPATH=~/software/ATLAS/include
 LIBPATH=~/software/ATLAS/lib/AC
 LIBS=  -lblas -lcblas -latlas -llapack -lcblas  -latlas -lm
-FLAGS= -g -O2
+FLAGS= -g 
 CC=gcc
 
-all: extract
+all: extract ar-gmm_convert ar-gmm
 
 
 ar-gmm_convert:ar-gmm_convert.c

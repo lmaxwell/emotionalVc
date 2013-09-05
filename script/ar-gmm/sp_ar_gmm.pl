@@ -501,7 +501,8 @@ if ($doTest)
 #		}
 		print M "fclose(fd);\n";
 		system("$SPTK/x2x +df $srcMcep >$srcMcep.f");
-		system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm_convert -l 48 -m $numMix -o $order -M $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm $srcMcep.f $testDir/wav/convert-$order/$iFile.mcep");
+		system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm_convert -l 48 -m $numMix -o $order  -g $workDir/ar-gmm/$numMix-mix/gvModel -i 40 -s 1 -M $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm $srcMcep.f $testDir/wav/convert-$order/$iFile.mcep");
+		print "$prjDir/script/ar-gmm/ar-gmmC/ar-gmm_convert -l 48 -m $numMix -o $order  -g $workDir/ar-gmm/$numMix-mix/gvModel -i 20 -s 0.001 -M $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm $srcMcep.f $testDir/wav/convert-$order/$iFile.mcep";
 		system("$SPTK/x2x +fa $testDir/wav/convert-$order/$iFile.mcep > $testDir/wav/convert-$order/$iFile.mcep.txt");
    }
   
