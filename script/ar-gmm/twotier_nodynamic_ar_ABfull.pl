@@ -3,7 +3,7 @@
 #
 #         FILE: twotier_nodynamic_ar_ABfull.pl
 #
-#        USAGE: ./twotier_nodynamic_ar_ABfull.pl  ../config/config.pm sad 6 12 1 64 1 mode
+#        USAGE: ./twotier_nodynamic_ar_ABfull.pl  ../config/config.pm sad mixNum_Phrase mixNum_syllable orderPhrase orderSyllable mixNUm_SP orderSP withGV? mode
 #
 #  DESCRIPTION: d
 #
@@ -22,7 +22,11 @@ use strict;
 use warnings;
 use utf8;
 
-
+if($#ARGV<8)
+{
+	print "USAGE: ./twotier_nodynamic_ar_ABfull.pl  ../config/config.pm sad mixNum_Phrase mixNum_syllable orderPhrase orderSyllable mixNUm_SP orderSP withGV? mode";
+	exit;
+}
 
 my ($clean,$init,$extractNeutral, $extract1, $extract2, $prepareForTrain,
     $doTrain,$doTest,$doRmse,$doResynth);
@@ -37,10 +41,12 @@ require("$prjDir/config/config.pm");
 my $emotion=$ARGV[1];
 my $mixNumOfPhrase=$ARGV[2];
 my $mixNumOfTone=$ARGV[3];
-my $mode=$ARGV[7];
-my $orderP=$ARGV[4];
-my $mixSp=$ARGV[5];
-my $orderSp=$ARGV[6];
+my $mode=$ARGV[9];
+my $orderPhrase=$ARGV[4];
+my $orderP=$ARGV[5];
+my $mixSp=$ARGV[6];
+my $orderSp=$ARGV[7];
+my $gv=$ARGV[8];
 #控制流程
 if($mode eq 'init')
 {
@@ -91,7 +97,7 @@ $doResynth=1;
 my $method='tone_nodynamic_diag';
 my $doF0Normalization=1;
 my $dctNumOfPhrase=3;
-my $dctNum = 8;
+my $dctNum = 5;
 my %mixNum=(
 	"sad" => [9,24], 
 	"angry" =>[7,16],
@@ -101,7 +107,7 @@ my %mixNum=(
 
 $mixNum{$emotion}=[$mixNumOfPhrase,$mixNumOfTone];
 
-my $testDir="$prjDir/test/$method"."_ar_ABfull"."/$emotion/$mixNum{$emotion}[0]mix$mixNum{$emotion}[1]mix_$dctNumOfPhrase.$orderP.$mixSp.$orderSp";
+my $testDir="$prjDir/test/$method"."_ar_ABfull"."/$emotion/$mixNum{$emotion}[0]mix$mixNum{$emotion}[1]mix_$dctNumOfPhrase.$orderPhrase.$orderP.$mixSp.$orderSp.gv$gv";
 my $trainDir="$prjDir/train/$method/$emotion/$mixNum{$emotion}[0]mix$mixNum{$emotion}[1]mix_$dctNumOfPhrase";
 
 =begin  BlockComment  # BlockCommentNo_1
@@ -131,6 +137,7 @@ my $gmmmap="$VC/gmmmap/gmmmap";
 
 ####f0 mean
 my $f0mean;
+my $f0meanEmotion;
 my $f0statFile= "$prjDir/train/linear/$emotion/neutral.stat" ;
 if(-r $f0statFile )
 {
@@ -145,6 +152,21 @@ else
 	print "no $f0statFile\n";
 	exit;
 }
+$f0statFile= "$prjDir/train/linear/$emotion/$emotion.stat" ;
+if(-r $f0statFile )
+{
+	open STAT,"<$f0statFile" or die "can't open $!\n";
+	my @stats=<STAT>;
+	chomp @stats;
+	$f0meanEmotion=$stats[0];
+	print "$emotion f0 mean  is $f0meanEmotion\n";
+}
+else
+{
+	print "no $f0statFile\n";
+	exit;
+}
+$f0meanEmotion=$f0mean;
 
 #######
 #read dict
@@ -217,8 +239,17 @@ if ($extract1)
             my @f0data = <F0>;
             chomp @f0data;
             close F0;
-			my @norm_f0data=map {$_-$f0mean} @f0data;
-			@f0data=@norm_f0data if ($doF0Normalization);
+			if($dir eq "$prjDir/neutral")
+			{
+				my @norm_f0data=map {$_-$f0mean} @f0data;
+				@f0data=@norm_f0data if ($doF0Normalization);
+			}
+			else
+			{
+				
+				my @norm_f0data=map {$_-$f0meanEmotion} @f0data;
+				@f0data=@norm_f0data if ($doF0Normalization);
+			}
 
             open PHRASE, ">$dir/dct/$method/$base.phrase"
               or die "can't open $!\n";
@@ -344,8 +375,17 @@ if ($extract1)
 			interpolate("$dir/dct/$method/phrasef0temp","$dir/dct/$method/$base.phrase_f0");
 			#print "f0 after subtracting phrase contour:@f0data\n";
 			open F0_TONE,">$dir/dct/$method/$base.f0_tone" or die "can't open $!\n";
-			my @temp_f0data=map {$_+$f0mean} @f0data;
-			print F0_TONE "$_\n" for(@temp_f0data);
+			if($dir eq "$prjDir/neutral")
+			{
+				my @temp_f0data=map {$_+$f0mean} @f0data;
+				print F0_TONE "$_\n" for(@temp_f0data);
+			}
+			else
+			{
+			
+				my @temp_f0data=map {$_+$f0meanEmotion} @f0data;
+				print F0_TONE "$_\n" for(@temp_f0data);
+			}
             #减去phrase后的f0
             open LAB, "<$dir/lab/mlevel/$fname" or die "can't open $!\n";
             my $line2 = <LAB>;    #skip line 1
@@ -593,15 +633,48 @@ if ($doTrain)
 	system("rm -f $trainDir/neutral.tone.f $trainDir/$emotion.tone.f");
 	my $vectorLength=2*$dctNumOfPhrase;
 
-	system("$SPTK/gmm -b 100 -l $vectorLength -m $mixNum{$emotion}[0]   $trainDir/neutral_$emotion.phrase.f >$trainDir/neutral_$emotion.phrase.gmm.f");
-	system("$SPTK/gmm -b 100 -l 16 -m $mixNum{$emotion}[1]   $trainDir/neutral_$emotion.tone.f >$trainDir/neutral_$emotion.tone.gmm.f");
+	system("$SPTK/gmm -b 50 -l $vectorLength -m $mixNum{$emotion}[0]   $trainDir/neutral_$emotion.phrase.f >$trainDir/neutral_$emotion.phrase.gmm.f");
+	system("$SPTK/gmm -b 50 -l 10 -m $mixNum{$emotion}[1]   $trainDir/neutral_$emotion.tone.f >$trainDir/neutral_$emotion.tone.gmm.f");
+	#system("$prjDir/script/ar-gmm/ar-gmmC/gmm_init -b 100 -l $vectorLength -m $mixNum{$emotion}[0] -T 0 -o $orderPhrase   $trainDir/neutral_$emotion.phrase.f_ar >$trainDir/neutral_$emotion.phrase.gmm.f");
+	#system("$prjDir/script/ar-gmm/ar-gmmC/gmm_init -b 100 -l 10 -m $mixNum{$emotion}[1]  -T 0 -o $orderP $trainDir/neutral_$emotion.tone.f_ar >$trainDir/neutral_$emotion.tone.gmm.f");
+
+	system("$SPTK/x2x +fa $trainDir/neutral_$emotion.phrase.gmm.f>$trainDir/neutral_$emotion.phrase.gmm_full");
 	system("$SPTK/x2x +fa $trainDir/neutral_$emotion.phrase.gmm.f>$trainDir/neutral_$emotion.phrase.gmm_full");
 	system("$SPTK/x2x +fa $trainDir/neutral_$emotion.tone.gmm.f>$trainDir/neutral_$emotion.tone.gmm");
-	system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -l 16 -m 12 -o $orderP -t 0.01 -v 0.001 -T 0 -N 30 -I $trainDir/neutral_$emotion.tone.gmm.f $trainDir/neutral_$emotion.tone.f_ar $trainDir/neutral_$emotion.tone.gmm_ar_ABfull_order$orderP.f");
-	system("$SPTK/x2x +fa $trainDir/neutral_$emotion.tone.gmm_ar_ABfull_order$orderP.f > $trainDir/neutral_$emotion.tone.gmm_ar_ABfull_order$orderP");
+	#system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -l 16 -m $mixNum{$emotion}[1] -o $orderP -t 0.01 -v 0.0001 -T 0 -N 60 -I $trainDir/neutral_$emotion.tone.gmm.f $trainDir/neutral_$emotion.tone.f_ar $trainDir/neutral_$emotion.tone.gmm_ar_ABfull_order$orderP.f");
+	my ($initOrder,$initModel);
 	
-	system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -l 6 -m 6 -o 1 -t 0.001 -v 0.001 -T 0 -N 30 -I $trainDir/neutral_$emotion.phrase.gmm.f $trainDir/neutral_$emotion.phrase.f_ar $trainDir/neutral_$emotion.phrase.gmm_ar_ABfull.f");
-	system("$SPTK/x2x +fa $trainDir/neutral_$emotion.phrase.gmm_ar_ABfull.f > $trainDir/neutral_$emotion.phrase.gmm_ar_ABfull");
+	if($orderP <= 10)
+	{
+	
+		$initOrder=-1;
+		$initModel="$trainDir/neutral_$emotion.tone.gmm.f";
+	}
+	else
+	{
+		$initOrder=$orderP-1;
+		$initModel="$trainDir/neutral_$emotion.tone.initgmm_ar_ABfull_order$initOrder.f";
+	}
+
+	#system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -l 10 -m $mixNum{$emotion}[1] -o $orderP -t 0.001 -v 0.0001 -T 0 -N 1 -I $initModel -O $initOrder $trainDir/neutral_$emotion.tone.f_ar $trainDir/neutral_$emotion.tone.initgmm_ar_ABfull_order$orderP.f");
+	system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -l 10 -m $mixNum{$emotion}[1] -o $orderP -t 0.001 -v 0.0001 -T 0 -N 60 -I $initModel -O $initOrder $trainDir/neutral_$emotion.tone.f_ar $trainDir/neutral_$emotion.tone.gmm_ar_ABfull_order$orderP.f");
+	system("$SPTK/x2x +fa $trainDir/neutral_$emotion.tone.gmm_ar_ABfull_order$orderP.f > $trainDir/neutral_$emotion.tone.gmm_ar_ABfull_order$orderP");
+	#system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -l 6 -m $mixNum{$emotion}[0]  -o $orderPhrase -t 0.001 -v 0.0001 -T 0 -N 60 -I $trainDir/neutral_$emotion.phrase.gmm.f $trainDir/neutral_$emotion.phrase.f_ar $trainDir/neutral_$emotion.phrase.gmm_ar_ABfull.f");
+	if($orderPhrase <= 10)
+	{
+		$initOrder=-1;
+		$initModel="$trainDir/neutral_$emotion.phrase.gmm.f";
+	}
+	else
+	{
+		$initOrder=$orderPhrase-1;
+		$initModel="$trainDir/neutral_$emotion.phrase.initgmm_ar_ABfull_order$initOrder.f";
+	}
+
+	#	system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -l 6 -m $mixNum{$emotion}[0]  -o $orderPhrase -t 0.001 -v 0.0001 -T 0 -N 1 -I $initModel -O $initOrder $trainDir/neutral_$emotion.phrase.f_ar $trainDir/neutral_$emotion.phrase.initgmm_ar_ABfull_order$orderPhrase.f");
+		system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -l 6 -m $mixNum{$emotion}[0]  -o $orderPhrase -t 0.001 -v 0.0001 -T 0 -N 60 -I $initModel -O $initOrder $trainDir/neutral_$emotion.phrase.f_ar $trainDir/neutral_$emotion.phrase.gmm_ar_ABfull_order$orderPhrase.f");
+		#print("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -l 6 -m $mixNum{$emotion}[0]  -o $orderPhrase -t 0.001 -v 0.0001 -T 0 -N 60 -I $initModel -O $initOrder $trainDir/neutral_$emotion.phrase.f_ar $trainDir/neutral_$emotion.phrase.gmm_ar_ABfull_order$orderPhrase.f");
+		system("$SPTK/x2x +fa $trainDir/neutral_$emotion.phrase.gmm_ar_ABfull_order$orderPhrase.f > $trainDir/neutral_$emotion.phrase.gmm_ar_ABfull_order$orderPhrase");
 }    #end il
 
 =a
@@ -682,7 +755,7 @@ if($doTest)
 		for my $t(0..$T-1)
 		{
 			print M "fprintf(fd,\'$alltext[$t]\\n\');\n";
-			print M "fprintf(fd,\'%f\\n\',predict($t*8+1:($t+1)*8));\n";
+			print M "fprintf(fd,\'%f\\n\',predict($t*5+1:($t+1)*5));\n";
 			print M "fprintf(fd,\'#\\n\');\n";	
 		}
 		print M "fclose(fd);\n";
@@ -765,8 +838,10 @@ if($doRmse)
 if($doResynth)
 {
 	system("rm -f $testDir/*");
+	pop @testfiles;
 	for my $iFile(@testfiles)
 	{
+	
 		system("cp $prjDir/neutral/dct/$method/$iFile.phrase $testDir");
 		system("cp $prjDir/neutral/dct/$method/$iFile.tone $testDir");
 	}
@@ -790,7 +865,7 @@ if($doResynth)
 			print M "fprintf(fd,\'$text\\n\');\n";
 			print M "x=[@phraseParas]';\n";
 			my $vectorLength=$dctNumOfPhrase*2;
-			print M "predict=gmm_ar_ABdiag_convert(x,$vectorLength,1,1,$mixNum{$emotion}[0],\'$trainDir/neutral_$emotion.phrase.gmm_ar_ABfull\',\'Bfull\');\n";
+			print M "predict=gmm_ar_ABdiag_convert(x,$vectorLength,$orderPhrase,$orderPhrase,$mixNum{$emotion}[0],\'$trainDir/neutral_$emotion.phrase.gmm_ar_ABfull_order$orderPhrase\',\'Bfull\');\n";
 			print M "fprintf(fd,\'%f\\n\',predict);\n";
 			print M "fprintf(fd,\'#\\n\');\n";	
 		}
@@ -818,11 +893,11 @@ if($doResynth)
 		}
 		
 		print M "x=[@alltone]';\n";
-		print M "predict=gmm_ar_ABdiag_convert(x,16,$orderP,$orderP,$mixNum{$emotion}[1],\'$trainDir/neutral_$emotion.tone.gmm_ar_ABfull_order$orderP\',\'Bfull\');\n";
+		print M "predict=gmm_ar_ABdiag_convert(x,10,$orderP,$orderP,$mixNum{$emotion}[1],\'$trainDir/neutral_$emotion.tone.gmm_ar_ABfull_order$orderP\',\'Bfull\');\n";
 		for my $t(0..$T-1)
 		{
 			print M "fprintf(fd,\'$alltext[$t]\\n\');\n";
-			print M "fprintf(fd,\'%f\\n\',predict($t*8+1:($t+1)*8));\n";
+			print M "fprintf(fd,\'%f\\n\',predict($t*5+1:($t+1)*5));\n";
 			print M "fprintf(fd,\'#\\n\');\n";	
 		}
 		print M "fclose(fd);\n";
@@ -878,7 +953,12 @@ if($doResynth)
 	system("$SPTK/rmse -l $dctNumOfPhrase $testDir/targetphrasetemp.f $testDir/sourcephrasetemp.f>$testDir/rmse_ne.phrase.f");
 	system("$SPTK/x2x +fa $testDir/rmse_ne.phrase.f>$testDir/rmse_ne.phrase.txt");
 	system("$SPTK/vstat -l 1 -o 1 $testDir/rmse_ne.phrase.f|$SPTK/x2x +fa>$testDir/mrmse_ne.phrase.txt");
-	
+	close TTEMP;
+	close PTEMP;
+	close STEMP;
+	close SOURCE;
+	close TARGET;
+	close PREDICT;
 	
 	print "caculate rmse of tone dct\n";
 	open TTEMP,">$testDir/targettonetemp" or die "can't open $!\n";
@@ -921,13 +1001,139 @@ if($doResynth)
 	system("$SPTK/x2x +af $testDir/sourcetonetemp >$testDir/sourcetonetemp.f");
 	system("$SPTK/rmse -l $dctNum $testDir/targettonetemp.f $testDir/predicttonetemp.f>$testDir/rmse.tone.f");
 	system("$SPTK/x2x +fa $testDir/rmse.tone.f>$testDir/rmse.tone.txt");
-	system("$SPTK/vstat -l 1 -o 1 $testDir/rmse.tone.f|$SPTK/x2x +fa>$testDir/mrmse.tone.txt");
+	system("$SPTK/vstat -l 1 -o 0 $testDir/rmse.tone.f|$SPTK/x2x +fa>$testDir/mrmse.tone.txt");
 
 	system("$SPTK/rmse -l $dctNum $testDir/targettonetemp.f $testDir/sourcetonetemp.f>$testDir/rmse_ne.tone.f");
 	system("$SPTK/x2x +fa $testDir/rmse_ne.tone.f>$testDir/rmse_ne.tone.txt");
-	system("$SPTK/vstat -l 1 -o 1 $testDir/rmse_ne.tone.f|$SPTK/x2x +fa>$testDir/mrmse_ne.tone.txt");
+	system("$SPTK/vstat -l 1 -o 0 $testDir/rmse_ne.tone.f|$SPTK/x2x +fa>$testDir/mrmse_ne.tone.txt");
+
+	close TTEMP;
+	close PTEMP;
+	close STEMP;
+	close SOURCE;
+	close TARGET;
+	close PREDICT;
+
+	print "calculate rmse of f0.\n";
+	open TTEMP,">$testDir/targetf0temp" or die "can't open $!\n";
+	open PTEMP,">$testDir/predictf0temp" or die "can't open $!\n";
 
 
+	for my $iFile(@testfiles)
+	{	
+		my $targetToneFile="$prjDir/$emotion/dct/$method/$iFile.tone";
+		#my $sourceToneFile="$testDir/$iFile.tone";
+
+		open TTONE,"<$targetToneFile" or die "can't open $!\n";
+		open PTONE,"<$testDir/$iFile.tone.predict" or die "can't open $!\n";
+		open TEMP,">$testDir/tonef0forrmsetemp" or die "can't open $!\n";	
+		my @targetTone=do{local $/="#\n";<TTONE>};
+		my @predictTone=do{local $/="#\n";<PTONE>};
+		for my $i(0..$#targetTone)
+		{
+			my @tToneDcts=split /\n/,$targetTone[$i];
+			pop @tToneDcts;
+			my $text=shift @tToneDcts;
+			$text=~/([0-9]+)\s([0-9]+)\s/;
+			my $lenOfSeg=($2-$1)/50000;
+			my $bcutEnd=$lenOfSeg-1;
+
+			my @pToneDcts=split /\n/,$predictTone[$i];
+			pop @pToneDcts;
+			shift @pToneDcts;
+			my @f0OfSeg=`echo @pToneDcts|$SPTK/x2x +af |$SPTK/bcut +f -s 0 -e $bcutEnd |$SPTK/idct -l $lenOfSeg | $SPTK/sopr -m sqrt$lenOfSeg | $SPTK/x2x +fa`;
+			print TEMP "$text\n";
+			print TEMP @f0OfSeg;
+			print TEMP "#\n";
+		}
+		close TTONE;
+		close PTONE;
+		close TEMP;
+		interpolate("$testDir/tonef0forrmsetemp","$testDir/$iFile.tone.f0.forf0rmse");
+
+		my $targetPhraseFile="$prjDir/$emotion/dct/$method/$iFile.phrase";
+		#my $sourceToneFile="$testDir/$iFile.tone";
+
+		open TPHRASE,"<$targetPhraseFile" or die "can't open $!\n";
+		open PPHRASE,"<$testDir/$iFile.phrase.predict" or die "can't open $!\n";
+		open TEMP,">$testDir/phrasef0forrmsetemp" or die "can't open $!\n";	
+		my @targetPhrase=do{local $/="#\n";<TPHRASE>};
+		my @predictPhrase=do{local $/="#\n";<PPHRASE>};
+		for my $i(0..$#targetPhrase)
+		{
+			my @tPhraseDcts=split /\n/,$targetPhrase[$i];
+			pop @tPhraseDcts;
+			my $text=shift @tPhraseDcts;
+			$text=~/([0-9]+)\s([0-9]+)\s/;
+			my $lenOfSeg=($2-$1)/50000;
+			my $bcutEnd=$lenOfSeg-1;
+
+			my @pPhraseDcts=split /\n/,$predictPhrase[$i];
+			pop @pPhraseDcts;
+			shift @pPhraseDcts;
+			my @f0OfSeg=`echo @pPhraseDcts|$SPTK/x2x +af |$SPTK/bcut +f -s 0 -e $bcutEnd |$SPTK/idct -l $lenOfSeg | $SPTK/sopr -m sqrt$lenOfSeg | $SPTK/x2x +fa`;
+			print TEMP "$text\n";
+			print TEMP @f0OfSeg;
+			print TEMP "#\n";
+		}
+		close TPHRASE;
+		close PPHRASE;
+		close TEMP;
+		interpolate("$testDir/phrasef0forrmsetemp","$testDir/$iFile.phrase.f0.forf0rmse");
+
+		system("$SPTK/x2x +af $testDir/$iFile.phrase.f0.forf0rmse >$testDir/temp1.f");
+		system("$SPTK/x2x +af $testDir/$iFile.tone.f0.forf0rmse >$testDir/temp2.f");
+
+		if($doF0Normalization)
+		{
+			system("$SPTK/vopr -a $testDir/temp1.f $testDir/temp2.f |$SPTK/sopr -a $f0meanEmotion |$SPTK/x2x +fa >$testDir/$iFile.f0.forf0rmse");
+		}
+		else
+		{
+			system("$SPTK/vopr -a $testDir/temp1.f $testDir/temp2.f|$SPTK/x2x +fa >$testDir/$iFile.f0.forf0rmse");
+		
+		}
+	    
+		open PF0FORRMSE,"<$testDir/$iFile.f0.forf0rmse" or die "can't open";
+		my @pF0forrmse=do{local $/="\n";<PF0FORRMSE>};
+		#chomp @pF0forrmse;
+		#print @pF0forrmse;
+		close PF0FORRMSE;
+		
+
+		open TF0FORRMSE,"<$prjDir/$emotion/logf0/$iFile.f0" or die "can't open";
+		my @tF0forrmse=do{local $/="\n";<TF0FORRMSE>};
+		#chomp @pF0forrmse;
+		#print @tF0forrmse;
+		close TF0FORRMSE;
+
+		for my $i(0..$#targetTone)
+		{
+			my @tToneDcts=split /\n/,$targetTone[$i];
+			pop @tToneDcts;
+			my $text=shift @tToneDcts;
+			$text=~/([0-9]+)\s([0-9]+)\s/;
+			my $start=$1/50000;
+			my $end=$2/50000;
+			for my $i($start..($end-1))
+			{
+				#print "start:$start,end:$end\n";
+				print  PTEMP $pF0forrmse[$i];
+				print  TTEMP $tF0forrmse[$i];
+			}
+		}
+	}
+	
+
+	close TTEMP;
+	close PTEMP;
+	system("$SPTK/x2x +af $testDir/predictf0temp |$SPTK/sopr -m cent > $testDir/predictf0temp.f");# |$SPTK/sopr -m cent
+	system("$SPTK/x2x +af $testDir/targetf0temp |$SPTK/sopr -m cent > $testDir/targetf0temp.f");# |$SPTK/sopr -m cent
+	system("$SPTK/rmse  $testDir/predictf0temp.f $testDir/targetf0temp.f |$SPTK/x2x +fa >$testDir/f0rmse");
+	print "F0 rmse is";
+	system("cat $testDir/f0rmse");
+	print "HZ\n";
+	#exit();
 	print "resynth f0 from converted parameter...\n";
 
 	my @predictToneFiles=<$testDir/*.tone.predict>;
@@ -981,7 +1187,7 @@ if($doResynth)
 			#print "befor unnorm:@f0OfPhrase\n";
 			if($doF0Normalization)
 			{
-				my @f0_unnorm=map {$_+$f0mean} @f0OfPhrase;
+				my @f0_unnorm=map {$_+$f0meanEmotion} @f0OfPhrase;
 				#print "after unnorm:@f0_unnorm\n";
 				@f0OfPhrase=@f0_unnorm;
 			}
@@ -1034,7 +1240,7 @@ if($doResynth)
 		print "iFile=$testFile;\n";
 		#print "f_morph(iFile,emotion,method,1,0,0,\'$testDir\');\n";
 		#print "f_morph(iFile,emotion,method,1,0,1,\'$testDir\');\n";
-		print "f_conversion_ar(iFile,emotion,$mixSp,$orderSp,\'$testDir\');\n";
+		print "f_conversion_ar(iFile,emotion,$mixSp,$orderSp,$gv,\'$testDir\');\n";
 	}
 	close M;
 	select STDOUT;

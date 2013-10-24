@@ -7,6 +7,9 @@
  *    							-l dimension 
  *    							-o order 
  *    							-I initial model file 
+ *    							-O initial model order
+ *    									-1:0 order with zero Transformation matrix
+ *    									k>=0: k order
  *    							-t 收敛条件 
  *    							-v vfloor 
  *    							-T dataType    0 prosody 1 spectrum
@@ -30,7 +33,7 @@
 #include <math.h>
 #include <time.h>
 #include <cblas.h>
-#include "ar-gmm_sub.h"
+//#include "ar-gmm_sub.h"
 
 #define PI 3.1415926
 #define ABS(x) ( (x)>0 ?(x):(-(x)) )
@@ -271,7 +274,7 @@ void cal_gconst(JGAUSS *gauss)
 }
 
 
-void readInitModel(FILE *fgmm,GMM *gmm)
+void readInitModel(FILE *fgmm,GMM *gmm,int initOrder)
 {
 	int m,M=gmm->M;
 	int l,L=gmm->L;
@@ -285,16 +288,61 @@ void readInitModel(FILE *fgmm,GMM *gmm)
 	{
 		gmm->gauss[m].weight=data[m];
 	}
-
-	for(m=0;m< gmm->M;m++)
+  if(initOrder==-1)
 	{
-		memcpy(gmm->gauss[m].miu.data,data+gmm->M+m*2*L,sizeof(float)*(gmm->L));
-		memcpy(gmm->gauss[m].var.data,data+gmm->M+m*2*L+L,sizeof(float)*(gmm->L));
-		cal_gconst(gmm->gauss+m);
-		printf("gconst[m]:%f\n",gmm->gauss[m].gconst);
+		for(m=0;m< gmm->M;m++)
+		{
+			memcpy(gmm->gauss[m].miu.data,data+gmm->M+m*2*L,sizeof(float)*(gmm->L));
+			memcpy(gmm->gauss[m].var.data,data+gmm->M+m*2*L+L,sizeof(float)*(gmm->L));
+			cal_gconst(gmm->gauss+m);
+			printf("gconst[m]:%f\n",gmm->gauss[m].gconst);
+		}
 	}
-	
+	else
+	{
+		float *tempp=data+gmm->M;
+		for(m=0;m < gmm->M;m++)
+		{
+			memcpy(gmm->gauss[m].miu.data,tempp,sizeof(float)*(gmm->L));
+			tempp+=L;
+			memcpy(gmm->gauss[m].ar.data,tempp,sizeof(float)*(gmm->L)*initOrder);
+			tempp+=L*initOrder;
+			memcpy(gmm->gauss[m].var.data,tempp,sizeof(float)*(gmm->L));
+			tempp+=L;
+			memcpy(gmm->gauss[m].bt.data,tempp,sizeof(float)*(gmm->L/2)*(gmm->L/2));
+			tempp+=L/2*L/2;
+		}
+		
+	}
 }
+/* void fwriteM(FMATRIX *matrix,FILE *fdata)
+ * {
+ * 	int m=matrix->row,n=matrix->col;
+ * 	fwrite(matrix->data,sizeof(float),m*n,fdata);
+ * }
+ * 
+ * void fwriteGMM(GMM *gmm,FILE *fgmm)
+ * {
+ * 	int M=gmm->M,L=gmm->L,order=gmm->order;
+ * 	int m,l,iO;
+ * 	for(m=0;m<M;m++)
+ * 	{
+ * 		//fwrite(&(gmm->gauss[m].gconst),sizeof(float),1,fgmm);
+ * 		fwrite(&(gmm->gauss[m].weight),sizeof(float),1,fgmm);
+ * 	}
+ * 	for(m=0;m<M;m++)
+ * 	{
+ * 		fwrite(gmm->gauss[m].miu.data,sizeof(float),L,fgmm);
+ * //		for(iO=0;iO<order;iO++)
+ * //		{
+ * //			fwrite(gmm->gauss[m].ar.data,sizeof(float),L,fgmm);
+ * //		}
+ * 		fwriteM(&(gmm->gauss[m].ar),fgmm);
+ * 		fwrite(gmm->gauss[m].var.data,sizeof(float),L,fgmm);
+ * 		fwriteM(&(gmm->gauss[m].bt),fgmm);
+ * 	}
+ * }
+ */
 
 double cal_postProb(float *miu,float *x,JGAUSS *gauss)
 {
@@ -364,7 +412,7 @@ int main(int argc,char **argv)
 	int L=16,ITE=20;
 	float thr=1.0E-2,vfloor=0.001;
 	FILE *fgmm;
-	int dataType;
+	int dataType,initOrder=-1;
 	GMM gmm;
 //	gmm.gauss=(JGAUSS *)malloc(sizeof(JGAUSS)*M);
 //	gmm.M=M;
@@ -410,6 +458,10 @@ int main(int argc,char **argv)
 										fgmm=fopen(*++argv,"rb");
 										--argc;
 										break;
+						case 'O':
+										initOrder=atoi(*++argv);
+										--argc;
+										break;
 						case 'T':
 										dataType= atoi(*++argv);
 										--argc;
@@ -423,7 +475,8 @@ int main(int argc,char **argv)
 
 	getmemGMM(&gmm,M,L,order);
 //	FILE *fgmm=fopen("neutral_sad.tone.gmm.f","rb");
-	readInitModel(fgmm,&gmm);
+	readInitModel(fgmm,&gmm,initOrder);
+	fclose(fgmm);
   
 /* 	double *testD=(double *)malloc(sizeof(double)*T*L);
  * 	fread(testD,sizeof(double),T*L,fdata);
@@ -579,7 +632,7 @@ int main(int argc,char **argv)
 				fflush(stdout);
 				jT=0;
 				finish=clock();
-				printf("%fsecond\n",(double)(finish-start)/CLOCKS_PER_SEC);
+			//	printf("%fsecond\n",(double)(finish-start)/CLOCKS_PER_SEC);
 				start=clock();
 				continue;
 			}
@@ -642,7 +695,8 @@ int main(int argc,char **argv)
 			if(ite==0)
 			{
 				for(l=0;l<L;l++)
-						vFloor[l]+=pow((pd[l]-gmm.gauss[maxMix].miu.data[l]),2.0);
+						//vFloor[l]+=pow((pd[l]-gmm.gauss[maxMix].miu.data[l]),2.0);
+						vFloor[l]+=pow((pd[l]-curMiu.data[m*L+l]),2.0);
 			}
 			for(m=0;m<M;m++)
 			{
@@ -933,7 +987,7 @@ int main(int argc,char **argv)
 			}
 			if(det<=0)
 			{
-					printf("add vfloor at %dmix\n");
+					printf("add vfloor at %dmix\n",m);
 					for(l=0;l<L;l++)
 						gmm.gauss[m].var.data[l]+=vFloor[l];
 			}
@@ -954,6 +1008,7 @@ int main(int argc,char **argv)
 	} // while
 		FILE *fogmm=fopen(*++argv,"wb");
 		fwriteGMM(&gmm,fogmm);
+		fclose(fogmm);
 		//fwrite(accXY.mix[0].dim[0].pdata,sizeof(double),L/2*L/2,fogmm);
   free(postProb);
 	free(accW);

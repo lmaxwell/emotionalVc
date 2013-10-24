@@ -32,7 +32,7 @@ my $extract=1;
 my $prepareForTrain=1;
 my $doTrain=1;
 
-my $doTest=1;
+my $doTest=0;
 ##全局参数初始化
 my $emotion='angry';
 my $trainDir="$prjDir/train/linear/$emotion";

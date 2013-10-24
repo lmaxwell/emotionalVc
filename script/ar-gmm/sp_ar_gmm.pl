@@ -3,7 +3,7 @@
 #
 #         FILE: sp_ar_gmm.pl
 #
-#        USAGE: ./sp_ar_gmm.pl  ../config/config.pm  targetEmotion   numMix   order  mode
+#        USAGE: ./sp_ar_gmm.pl  ../config/config.pm  targetEmotion   numMix   order  withGV?  mode
 #
 #  DESCRIPTION: convert spectrum using  ar-gmm
 #
@@ -23,14 +23,14 @@ use warnings;
 use utf8;
 
 
-my ($init,$init_mcep, $mcep,$preTrain, $doTrain, $doTest);
+my ($init,$init_mcep, $mcep,$preTrain, $doTrain, $doTest,$calMelCD);
 
-if($#ARGV<4)
+if($#ARGV<5)
 {
-	print "USAGE: ./sp_ar_gmm.pl  ../config/config.pm  targetEmotion   numMix   order  mode\n";
+	print "USAGE: ./sp_ar_gmm.pl  ../config/config.pm  targetEmotion   numMix   order withGV?  mode\n";
 	exit;
 }
-my $mode = $ARGV[4];
+my $mode = $ARGV[5];
 
 if($mode eq 'init')
 {
@@ -61,12 +61,13 @@ if($mode eq 'train')
 }
 if($mode eq 'test')
 {
-	$init    = 0;
+	$init    = 1;
 	$init_mcep=0;
 	$mcep    = 0;
 	$preTrain = 0;
 	$doTrain = 0;
 	$doTest  = 1;
+	$calMelCD=1;
 }
 my $numMix=$ARGV[2];
 my $src = 'neutral';
@@ -75,6 +76,7 @@ my $prjDir  = '..';
 my $workDir = "$prjDir/vc/train/to$trg"."_ar";
 my $testDir = "$workDir/test/$numMix-mix";
 
+my $gv=$ARGV[4];
 my $order=$ARGV[3];
 #train file list
 my $srcList="$workDir/list/$src"."_tr.list";
@@ -166,7 +168,7 @@ if ($init_mcep)
         $srcSP =~ /([0-9]+).sp/;
         print "extacting mcep from $srcSP\n";
         system(
-            "$SPTK/x2x +af $srcSP|$SPTK/mcep -a 0.42 -m 24 -l 1024 -q 3 |x2x +fd>$prjDir/vc/train/mcepc0/$src/$1.mcep"
+            "$SPTK/x2x +af $srcSP|$SPTK/mcep -a 0.42 -m 24 -l 1024 -q 4 |x2x +fd>$prjDir/vc/train/mcepc0/$src/$1.mcep"
         );
     }
     my @trgSPs = <$prjDir/$trg/spectrum/*.sp>;
@@ -175,7 +177,7 @@ if ($init_mcep)
         print "extracting mcep from $trgSP\n";
         $trgSP =~ /([0-9]+).sp/;
         system(
-            "$SPTK/x2x +af $trgSP|$SPTK/mcep -a 0.42 -m 24 -l 1024 -q 3 |x2x +fd>$prjDir/vc/train/mcepc0/$trg/$1.mcep"
+            "$SPTK/x2x +af $trgSP|$SPTK/mcep -a 0.42 -m 24 -l 1024 -q 4 |x2x +fd>$prjDir/vc/train/mcepc0/$trg/$1.mcep"
         );
     }
 
@@ -319,7 +321,7 @@ if ($preTrain)
 		my $dtwFile="$workDir/dtw/$numMix-mix/$trainFile.jmcep";
 		system("$SPTK/x2x +df $srcFile >$srcFile.f");
 		system("$SPTK/x2x +df $trgFile >$trgFile.f");
-		system("$SPTK36/dtw -l 24 -p 2 $trgFile.f $srcFile.f -v $viterbiFile -s $scoreFile >>$dtwFile");
+		system("$SPTK36/dtw -l 24 -p 2 $trgFile.f $srcFile.f -v $viterbiFile -s $scoreFile >$dtwFile");
 			system("$prjDir/script/ar-gmm/ar-gmmC/extract -l 24 -o $order -t -100.0  $viterbiFile $srcFile.f $trgFile.f $srcPow.f $trgPow.f $dtwFile");
 		system("cat $scoreFile >>$jointFile.melCD") unless(-z $scoreFile);
 #				
@@ -377,7 +379,7 @@ if ($preTrain)
 		$index+=1;
 
 	}
-	system("$SPTK36/vstat $jointFile.melCD |x2x +fa >>$jointFile.melCDavg ");
+	system("$SPTK36/vstat $jointFile.melCD |x2x +fa >>$jointFile.melCDavg");
 	system("$SPTK/x2x +fa48 $jointFile-ar >$jointFile-ar.txt");
 	system("$SPTK/x2x +fd $jointFile >$jointFile.f");
 	#system("$SPTK36/vstart -l 48 -o 1  $jointFile > $workDir/dtw/$numMix-mix/mcepVMean");
@@ -391,13 +393,51 @@ if ($preTrain)
 	mkdir "$workDir/ar-gmm",0755;
 	mkdir "$workDir/ar-gmm/$numMix-mix",0755;
 	system("$SPTK36/vstat -d -l 48 -o 0 $gvFile > $gvModel");
-	system("$SPTK/gmm -m 64 -l 48 -b 5 $jointFile >$workDir/ar-gmm/$numMix-mix/initmodel");
+	#system("$SPTK/gmm -m 64 -l 48 -b 5 $jointFile >$workDir/ar-gmm/$numMix-mix/initmodel");
 }
 if($doTrain)
 {
 	my $jointFile="$workDir/dtw/$numMix-mix/$src-$trg.mat";
-    system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -m 64 -l 48 -o $order  -t 0.01 -v 0.001 -T 1 -N 20 -I $workDir/ar-gmm/$numMix-mix/initmodel $jointFile $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm > $workDir/ar-gmm/$numMix-mix/order$order.log");
+#	print("$prjDir/script/ar-gmm/ar-gmmC/gmm_init -m 64 -l 48 -T 1 -o $order $jointFile> $workDir/ar-gmm/$numMix-mix/initmodel\n");
+#	system("$prjDir/script/ar-gmm/ar-gmmC/gmm_init -m 64 -l 48 -T 1 -o $order $jointFile> $workDir/ar-gmm/$numMix-mix/initmodel");
+	my ($initModel,$initOrder);
+	if($order==0)
+	{
+		system("$SPTK/gmm -m 64 -l 48 -b 50 $jointFile >$workDir/ar-gmm/$numMix-mix/initmodel");
+	}
+	if($order <= 10)
+	{
+		$initModel="$workDir/ar-gmm/$numMix-mix/initmodel";
+		$initOrder=-1;
 
+	}
+	elsif($order <= 2)
+	{
+		$initOrder=$order-1;
+		$initModel="$workDir/ar-gmm/$numMix-mix/$src-$trg-order$initOrder.ar-gmm";
+	}
+	else
+	{
+
+		$initOrder=1;
+		$initModel="$workDir/ar-gmm/$numMix-mix/$src-$trg-order$initOrder.ar-gmm";
+		
+	}
+
+	if($order <= 10)
+	{	
+		#print("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -m 64 -l 48 -o $order  -t 0.01 -v 0.001 -T 1 -N 1 -I $initModel -O $initOrder $jointFile $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm_init > $workDir/ar-gmm/$numMix-mix/order$order.initlog");
+		#system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -m 64 -l 48 -o $order  -t 0.01 -v 0.001 -T 1 -N 1 -I $initModel -O $initOrder $jointFile $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm_init > $workDir/ar-gmm/$numMix-mix/order$order.initlog");
+		#print("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -m 64 -l 48 -o $order  -t 0.01 -v 0.001 -T 1 -N 15 -I $initModel -O $initOrder $jointFile $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm > $workDir/ar-gmm/$numMix-mix/order$order.log");
+		system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -m 64 -l 48 -o $order  -t 0.01 -v 0.001 -T 1 -N 15 -I $initModel -O $initOrder $jointFile $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm > $workDir/ar-gmm/$numMix-mix/order$order.log");
+	}
+	else
+	{
+	
+		print("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -m 64 -l 48 -o $order  -t 0.01 -v 0.001 -T 1 -N 3 -I $initModel -O $initOrder $jointFile $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm > $workDir/ar-gmm/$numMix-mix/order$order.log");
+		print "\n";
+		system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm -m 64 -l 48 -o $order  -t 0.01 -v 0.001 -T 1 -N 3 -I $initModel -O $initOrder $jointFile $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm > $workDir/ar-gmm/$numMix-mix/order$order.log");
+	}
 	exit;
 	mkdir "$workDir/cbook",0755;
 	mkdir "$workDir/cbook/$numMix-mix",0755;
@@ -446,6 +486,7 @@ if ($doTest)
         );
     }
 =cut
+	print "do TEST!\n";
 	for my $iFile (@testfiles)
     {
         system(
@@ -453,8 +494,8 @@ if ($doTest)
         );
     }
    mkdir "$testDir/wav/convert",0755;
-   mkdir "$testDir/wav/convert-$order",0755;
-   open M,">$testDir/wav/convert-$order/convert.m" or die "can't oepn";
+   mkdir "$testDir/wav/convert-$order-g$gv",0755;
+   open M,">$testDir/wav/convert-$order-g$gv/convert.m" or die "can't oepn";
    print M "addpath('$prjDir/script');\n";
    print M "addpath('$prjDir/script/ar-gmm');\n";
 
@@ -471,7 +512,7 @@ if ($doTest)
 #		my @src=unpack("d$n",$data);
 #		#print "@src";
 		print M "fprintf(\'converting $srcMcep \\n \');\n";
-		print M "fd=fopen(\'$testDir/wav/convert-$order/$iFile.mcep.txt',\'w\');\n";
+		print M "fd=fopen(\'$testDir/wav/convert-$order-g$gv/$iFile.mcep.txt',\'w\');\n";
 #		my $num=($#src+1)/25;
 #		#	print $num;
 #		my $expr="x=[";
@@ -501,22 +542,130 @@ if ($doTest)
 #		}
 		print M "fclose(fd);\n";
 		system("$SPTK/x2x +df $srcMcep >$srcMcep.f");
-		system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm_convert -l 48 -m $numMix -o $order  -g $workDir/ar-gmm/$numMix-mix/gvModel -i 40 -s 1 -M $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm $srcMcep.f $testDir/wav/convert-$order/$iFile.mcep");
+		system("$prjDir/script/ar-gmm/ar-gmmC/ar-gmm_convert -l 48 -m $numMix -o $order  -g $workDir/ar-gmm/$numMix-mix/gvModel -i 40 -G $gv -s 1 -M $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm $srcMcep.f $testDir/wav/convert-$order-g$gv/$iFile.mcep");
 		print "$prjDir/script/ar-gmm/ar-gmmC/ar-gmm_convert -l 48 -m $numMix -o $order  -g $workDir/ar-gmm/$numMix-mix/gvModel -i 20 -s 0.001 -M $workDir/ar-gmm/$numMix-mix/$src-$trg-order$order.ar-gmm $srcMcep.f $testDir/wav/convert-$order/$iFile.mcep";
-		system("$SPTK/x2x +fa $testDir/wav/convert-$order/$iFile.mcep > $testDir/wav/convert-$order/$iFile.mcep.txt");
+		system("$SPTK/x2x +fa $testDir/wav/convert-$order-g$gv/$iFile.mcep > $testDir/wav/convert-$order-g$gv/$iFile.mcep.txt");
    }
   
    #exit;
    #system("$MATLAB<$testDir/wav/convert/convert.m");
    #exit;
-
+    
+   print "\nconvert mel-cepstrum to spectrum\n";
     for my $iFile (@testfiles)
     {
         system(
-            "$SPTK/x2x +af $testDir/wav/convert-$order/$iFile.mcep.txt|$SPTK/mgc2sp -a 0.42 -m 24 -l 1024 -o 2 |$SPTK/x2x -o +fa513> $testDir/wav/convert-$order/$iFile.sp "
+            "$SPTK/x2x +af $testDir/wav/convert-$order-g$gv/$iFile.mcep.txt|$SPTK/mgc2sp -a 0.42 -m 24 -l 1024 -o 3 |$SPTK/x2x -o +fa513> $testDir/wav/convert-$order-g$gv/$iFile.sp "
         );
     }
+if($calMelCD)
+{
+	print "calculate original mel-cestrum distance...\n";
+	
+=a
+	my $jointFile="$workDir/dtw/$numMix-mix/$src-$trg.mat";
+	
+	my $melCDdir="$workDir/test/$numMix-mix/mel-CD/$order-g$gv";
+	mkdir "$workDir/test/$numMix-mix/mel-CD/",0755;
+	mkdir "$melCDdir",0755;
+	
+	system("$SPTK36/bcp +f -l 48 -s 0 -e 23 -L 25 -S 1 $jointFile > $melCDdir/$src.mat");
+	system("$SPTK36/bcp +f -l 48 -s 24 -e 47 -L 25 -S 1 $jointFile > $melCDdir/$trg.mat");
+	
+	system("$SPTK36/cdist -o 0 -m 24 $melCDdir/$src.mat $melCDdir/$trg.mat |x2x +fa >$melCDdir/melCD ");
 
+=cut
+	my $melCDdir="$workDir/test/$numMix-mix/mel-CD/$order-g$gv";
+	mkdir "$workDir/test/$numMix-mix/mel-CD/",0755;
+	mkdir "$melCDdir",0755;
+	mkdir "$melCDdir/org";
+	mkdir "$melCDdir/conv";
+	system("rm -f $melCDdir/org.data");
+	for my $iFile(@testfiles)
+	{
+		if($iFile eq '341')
+		{
+			next;
+		}
+
+		my $srcFile="$testDir/wav/$src-$trg"."_$numMix"."mix/$iFile.wav.org.mcep";
+		my $trgFile="$workDir/../mcepc0/$trg/$iFile.mcep";
+		system("$SPTK36/x2x +df $trgFile >$trgFile.f");
+		my $srcTemp="$melCDdir/srctemp";
+		my $trgTemp="$melCDdir/trgtemp";
+		system("$SPTK36/bcp +f -l 25 -s 1 -e 24 -L 24 -S 0 $srcFile.f>$srcTemp ");
+		system("$SPTK36/bcp +f -l 25 -s 1 -e 24 -L 24 -S 0 $trgFile.f>$trgTemp ");
+		my $dtwFile="$melCDdir/org/$iFile.jmcep";
+		system("$SPTK36/dtw -l 24 -p 2 $srcTemp $trgTemp  >$dtwFile");
+		system("cat $dtwFile >> $melCDdir/org.data");
+	}
+	system("$SPTK36/bcp +f -l 48 -s 0 -e 23 -L 25 -S 1 $melCDdir/org.data > $melCDdir/$src.mat");
+	system("$SPTK36/bcp +f -l 48 -s 24 -e 47 -L 25 -S 1 $melCDdir/org.data > $melCDdir/$trg.mat");
+	system("$SPTK36/cdist -o 0 -m 24 $melCDdir/$src.mat $melCDdir/$trg.mat |x2x +fa >$melCDdir/melCD ");
+	
+	print "calculate  mel-cestrum distance on test set...\n";
+	my $convDir="$testDir/wav/convert-$order-g$gv";
+	my $srcDir="$workDir/mcep";
+	my $testSrc="$melCDdir/test$src.mat";
+	my $testTrg="$melCDdir/testConv.mat";
+	system("rm -f $testSrc $testTrg");
+	system("rm -f $melCDdir/conv.data");
+	for my $iFile (@testfiles)
+	{
+		if($iFile eq '341')
+		{
+			next;
+		}
+
+   		my $trgMcep="$workDir/../mcepc0/$trg/$iFile.mcep";
+		my $conMcep="$convDir/$iFile.mcep";
+		my $convTemp="$melCDdir/convtemp";
+		my $trgTemp="$melCDdir/trgtemp";
+		system("$SPTK36/bcp +f -l 25 -s 1 -e 24 -L 24 -S 0 $trgMcep.f>$trgTemp ");
+		system("$SPTK36/bcp +f -l 25 -s 1 -e 24 -L 24 -S 0 $conMcep> $convTemp ");
+
+		my $dtwFile="$melCDdir/conv/$iFile.jmcep";
+		system("$SPTK36/dtw -l 24 -p 2 $convTemp $trgTemp  >$dtwFile");
+		system("cat $dtwFile >> $melCDdir/conv.data");
+
+	}
+
+	system("$SPTK36/bcp +f -l 48 -s 0 -e 23 -L 25 -S 1 $melCDdir/conv.data > $testSrc");
+	system("$SPTK36/bcp +f -l 48 -s 24 -e 47 -L 25 -S 1 $melCDdir/conv.data > $testTrg");
+	#system("$SPTK36/cdist -o 0 -m 24 $melCDdir/$src.mat $melCDdir/$trg.mat |x2x +fa >$melCDdir/melCD ");
+	system("$SPTK36/cdist -o 0 -m 24 $testSrc $testTrg|x2x +fa >$melCDdir/melCD_test ");
+
+
+	exit;
+	my @trainFiles=`cat $trgList`;
+	chomp @trainFiles;
+
+	open LIST,"<$srcList" or die "can't open";
+	my $trainFile;
+
+	#my $melCDdir="$workDir/test/$numMix-mix/mel-CD/$order";
+	mkdir "$workDir/test/$numMix-mix/mel-CD/",0755;
+	mkdir "$melCDdir",0755;
+	system("rm -f $melCDdir/$src.mat");
+	system("rm -f $melCDdir/$trg.mat");
+	my $index=0;
+	while($trainFile=<LIST>)
+	{
+	
+		chomp $trainFile;
+		my $srcmcepf="$workDir/mcep/$trainFile.mcep.f";
+		my $trgmcepf="$workDir/mcep/$trainFiles[$index].mcep.f";
+		system("cat $srcmcepf >> $melCDdir/$src.mat");
+		system("cat $trgmcepf >> $melCDdir/$trg.mat");
+		$index +=1;
+	
+	}
+	close LIST;
+	system("$SPTK36/cdist -o 0 -m 24 $melCDdir/$src.mat $melCDdir/$trg.mat |x2x +fa >$melCDdir/melCD ");
+
+}
 
 
 }
+
+

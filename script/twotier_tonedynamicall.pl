@@ -64,8 +64,8 @@ $extract2        = 0;    #提取tone
 =cut
 $prepareForTrain = 1;    #准备训练数据
 $doTrain         = 1;    #训练
-$doTest 		 = 1;	 #测试
-$doRmse			=1;
+$doTest 		 = 0;	 #测试
+$doRmse			=0;
 $doResynth=0;
 }
 elsif($mode eq 'resynth')
@@ -79,7 +79,7 @@ $extract2        = 0;    #提取tone
 
 $prepareForTrain = 0;    #准备训练数据
 $doTrain         = 0;    #训练
-$doTest 		 = 1;	 #测试
+$doTest 		 = 0;	 #测试
 $doRmse			=0;
 $doResynth=1;
 }
@@ -87,7 +87,7 @@ $doResynth=1;
 my $method='tone_dall';
 my $doF0Normalization=1;
 my $dctNumOfPhrase=3;
-my $dctNum = 8;
+my $dctNum = 5;
 my %mixNum=(
 	"sad" => [9,24], 
 	"angry" =>[7,16],
@@ -606,7 +606,7 @@ if ($doTrain)
 	system("rm -f $trainDir/neutral.tone.f $trainDir/$emotion.tone.f");
 	my $vectorLength=2*$dctNumOfPhrase;
 	system("$SPTK/gmm -b 100 -l $vectorLength -m $mixNum{$emotion}[0] -f $trainDir/neutral_$emotion.phrase.f >$trainDir/neutral_$emotion.phrase.gmm.f");
-	system("$SPTK/gmm -b 100 -l 32 -m $mixNum{$emotion}[1] -f $trainDir/neutral_$emotion.tone.f >$trainDir/neutral_$emotion.tone.gmm.f");
+	system("$SPTK/gmm -b 100 -l 20 -m $mixNum{$emotion}[1] -f $trainDir/neutral_$emotion.tone.f >$trainDir/neutral_$emotion.tone.gmm.f");
 	system("$SPTK/x2x +fa $trainDir/neutral_$emotion.phrase.gmm.f>$trainDir/neutral_$emotion.phrase.gmm");
 	system("$SPTK/x2x +fa $trainDir/neutral_$emotion.tone.gmm.f>$trainDir/neutral_$emotion.tone.gmm");
 
@@ -686,7 +686,7 @@ if($doTest)
 		}
 		
 		print M "x=[@alltone]';\n";
-		print M "predict=gmm_convert(x,32,$mixNum{$emotion}[1],\'$trainDir/neutral_$emotion.tone.gmm\',\'trajectory_d\');\n";
+		print M "predict=gmm_convert(x,10,$mixNum{$emotion}[1],\'$trainDir/neutral_$emotion.tone.gmm\',\'trajectory_d\');\n";
 		for my $t(0..$T-1)
 		{
 			print M "fprintf(fd,\'$alltext[$t]\\n\');\n";
@@ -773,6 +773,7 @@ if($doRmse)
 if($doResynth)
 {
 	system("rm -f $testDir/*");
+	pop @testfiles;
 	for my $iFile(@testfiles)
 	{
 		system("cp $prjDir/neutral/dct/$method/$iFile.phrase $testDir");
@@ -825,11 +826,11 @@ if($doResynth)
 		}
 		
 		print M "x=[@alltone]';\n";
-		print M "predict=gmm_convert(x,32,$mixNum{$emotion}[1],\'$trainDir/neutral_$emotion.tone.gmm\',\'trajectory_d\');\n";
+		print M "predict=gmm_convert(x,20,$mixNum{$emotion}[1],\'$trainDir/neutral_$emotion.tone.gmm\',\'trajectory_d\');\n";
 		for my $t(0..$T-1)
 		{
 			print M "fprintf(fd,\'$alltext[$t]\\n\');\n";
-			print M "fprintf(fd,\'%f\\n\',predict($t*8+1:($t+1)*8));\n";
+			print M "fprintf(fd,\'%f\\n\',predict($t*5+1:($t+1)*5));\n";
 			print M "fprintf(fd,\'#\\n\');\n";	
 		}
 		print M "fclose(fd);\n";
@@ -932,7 +933,117 @@ if($doResynth)
 	system("$SPTK/x2x +fa $testDir/rmse_ne.tone.f>$testDir/rmse_ne.tone.txt");
 	system("$SPTK/vstat -l 1 -o 1 $testDir/rmse_ne.tone.f|$SPTK/x2x +fa>$testDir/mrmse_ne.tone.txt");
 
+    	print "calculate rmse of f0.\n";
+	open TTEMP,">$testDir/targetf0temp" or die "can't open $!\n";
+	open PTEMP,">$testDir/predictf0temp" or die "can't open $!\n";
 
+
+	for my $iFile(@testfiles)
+	{	
+		my $targetToneFile="$prjDir/$emotion/dct/$method/$iFile.tone";
+		#my $sourceToneFile="$testDir/$iFile.tone";
+
+		open TTONE,"<$targetToneFile" or die "can't open $!\n";
+		open PTONE,"<$testDir/$iFile.tone.predict" or die "can't open $!\n";
+		open TEMP,">$testDir/tonef0forrmsetemp" or die "can't open $!\n";	
+		my @targetTone=do{local $/="#\n";<TTONE>};
+		my @predictTone=do{local $/="#\n";<PTONE>};
+		for my $i(0..$#targetTone)
+		{
+			my @tToneDcts=split /\n/,$targetTone[$i];
+			pop @tToneDcts;
+			my $text=shift @tToneDcts;
+			$text=~/([0-9]+)\s([0-9]+)\s/;
+			my $lenOfSeg=($2-$1)/50000;
+			my $bcutEnd=$lenOfSeg-1;
+
+			my @pToneDcts=split /\n/,$predictTone[$i];
+			pop @pToneDcts;
+			shift @pToneDcts;
+			my @f0OfSeg=`echo @pToneDcts|$SPTK/x2x +af |$SPTK/bcut +f -s 0 -e $bcutEnd |$SPTK/idct -l $lenOfSeg | $SPTK/sopr -m sqrt$lenOfSeg | $SPTK/x2x +fa`;
+			print TEMP "$text\n";
+			print TEMP @f0OfSeg;
+			print TEMP "#\n";
+		}
+		close TTONE;
+		close PTONE;
+		close TEMP;
+		interpolate("$testDir/tonef0forrmsetemp","$testDir/$iFile.tone.f0.forf0rmse");
+
+		my $targetPhraseFile="$prjDir/$emotion/dct/$method/$iFile.phrase";
+		#my $sourceToneFile="$testDir/$iFile.tone";
+
+		open TPHRASE,"<$targetPhraseFile" or die "can't open $!\n";
+		open PPHRASE,"<$testDir/$iFile.phrase.predict" or die "can't open $!\n";
+		open TEMP,">$testDir/phrasef0forrmsetemp" or die "can't open $!\n";	
+		my @targetPhrase=do{local $/="#\n";<TPHRASE>};
+		my @predictPhrase=do{local $/="#\n";<PPHRASE>};
+		for my $i(0..$#targetPhrase)
+		{
+			my @tPhraseDcts=split /\n/,$targetPhrase[$i];
+			pop @tPhraseDcts;
+			my $text=shift @tPhraseDcts;
+			$text=~/([0-9]+)\s([0-9]+)\s/;
+			my $lenOfSeg=($2-$1)/50000;
+			my $bcutEnd=$lenOfSeg-1;
+
+			my @pPhraseDcts=split /\n/,$predictPhrase[$i];
+			pop @pPhraseDcts;
+			shift @pPhraseDcts;
+			my @f0OfSeg=`echo @pPhraseDcts|$SPTK/x2x +af |$SPTK/bcut +f -s 0 -e $bcutEnd |$SPTK/idct -l $lenOfSeg | $SPTK/sopr -m sqrt$lenOfSeg | $SPTK/x2x +fa`;
+			print TEMP "$text\n";
+			print TEMP @f0OfSeg;
+			print TEMP "#\n";
+		}
+		close TPHRASE;
+		close PPHRASE;
+		close TEMP;
+		interpolate("$testDir/phrasef0forrmsetemp","$testDir/$iFile.phrase.f0.forf0rmse");
+
+		system("$SPTK/x2x +af $testDir/$iFile.phrase.f0.forf0rmse >$testDir/temp1.f");
+		system("$SPTK/x2x +af $testDir/$iFile.tone.f0.forf0rmse >$testDir/temp2.f");
+		system("$SPTK/vopr -a $testDir/temp1.f $testDir/temp2.f|$SPTK/sopr -a $f0mean | $SPTK/x2x +fa >$testDir/$iFile.f0.forf0rmse");
+	    
+		open PF0FORRMSE,"<$testDir/$iFile.f0.forf0rmse" or die "can't open";
+		my @pF0forrmse=do{local $/="\n";<PF0FORRMSE>};
+		#chomp @pF0forrmse;
+		#print @pF0forrmse;
+		close PF0FORRMSE;
+		
+
+		open TF0FORRMSE,"<$prjDir/$emotion/logf0/$iFile.f0" or die "can't open";
+		my @tF0forrmse=do{local $/="\n";<TF0FORRMSE>};
+		#chomp @pF0forrmse;
+		#print @tF0forrmse;
+		close TF0FORRMSE;
+
+		for my $i(0..$#targetTone)
+		{
+			my @tToneDcts=split /\n/,$targetTone[$i];
+			pop @tToneDcts;
+			my $text=shift @tToneDcts;
+			$text=~/([0-9]+)\s([0-9]+)\s/;
+			my $start=$1/50000;
+			my $end=$2/50000;
+			for my $i($start..($end-1))
+			{
+				#print "start:$start,end:$end\n";
+				print  PTEMP $pF0forrmse[$i];
+				print  TTEMP $tF0forrmse[$i];
+			}
+		}
+	}
+	
+
+	close TTEMP;
+	close PTEMP;
+	system("$SPTK/x2x +af $testDir/predictf0temp |$SPTK/sopr -m cent> $testDir/predictf0temp.f");
+	system("$SPTK/x2x +af $testDir/targetf0temp |$SPTK/sopr -m cent > $testDir/targetf0temp.f");
+	system("$SPTK/rmse  $testDir/predictf0temp.f $testDir/targetf0temp.f |$SPTK/x2x +fa >$testDir/f0rmse");
+	print "F0 rmse is";
+	system("cat $testDir/f0rmse");
+	print "HZ\n";
+	exit();
 	print "resynth f0 from converted parameter...\n";
 
 	my @predictToneFiles=<$testDir/*.tone.predict>;

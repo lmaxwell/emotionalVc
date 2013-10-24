@@ -118,9 +118,9 @@ plot([0,1.8], [6 ,6],'k');
 hold on;
 plot([1.8,1.8],[4.5,6],'k');
 hold off;
-title('F0');
-set(gca,'xticklabel',sprintf('%1.1f|',get(gca,'xtick')));
-set(gca,'yticklabel',sprintf('%1.1f|',get(gca,'ytick')));
+title('F0','FontName','Times','FontSize',8);
+set(gca,'xticklabel',sprintf('%1.1f|',get(gca,'xtick')),'FontName','Times New Roman','FontSize',8);
+set(gca,'yticklabel',sprintf('%1.1f|',get(gca,'ytick')),'FontName','Times New Roman','FontSize',8);
 subplot(3,1,2);
 hold on;
 box off;
@@ -137,9 +137,9 @@ plot([0,1.8], [0.5,0.5],'k');
 hold on;
 plot([1.8,1.8],[-0.5,0.5],'k');
 
-title('phrase level');
-set(gca,'xticklabel',sprintf('%1.1f|',get(gca,'xtick')));
-set(gca,'yticklabel',sprintf('%1.1f|',get(gca,'ytick')));
+title('phrase level','FontName','Times New Roman','FontSize',8);
+set(gca,'xticklabel',sprintf('%1.1f|',get(gca,'xtick')),'FontName','Times New Roman','FontSize',8);
+set(gca,'yticklabel',sprintf('%1.1f|',get(gca,'ytick')),'FontName','Times New Roman','FontSize',8);
 subplot(3,1,3);
 hold on;
 box off;
@@ -156,9 +156,9 @@ plot([0,1.8], [0.5,0.5],'k');
 hold on;
 plot([1.8,1.8],[-1,0.5],'k');
 
-title('syllable level');
-set(gca,'xticklabel',sprintf('%1.1f|',get(gca,'xtick')));
-set(gca,'yticklabel',sprintf('%1.1f|',get(gca,'ytick')));
+title('syllable level','FontName','Times New Roman','FontSize',8);
+set(gca,'xticklabel',sprintf('%1.1f|',get(gca,'xtick')),'FontName','Times New Roman','FontSize',8);
+set(gca,'yticklabel',sprintf('%1.1f|',get(gca,'ytick')),'FontName','Times New Roman','FontSize',8);
 
 %% 
 %重建误差图

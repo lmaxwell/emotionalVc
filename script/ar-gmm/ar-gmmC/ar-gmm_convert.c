@@ -9,6 +9,7 @@
  *    						-o order
  *    						-M model file
  *    						-g global variance model file
+ *    						-G 0:no global variance 1: with global variance
  *    						-s step size
  *    						-i max iteration number
  *    						input  (L/2+1)*T
@@ -412,7 +413,7 @@ int main(int argc,char **argv)
 	int order=3;
 	int L=48;
 	int l;
-	int ngvite=20;
+	int ngvite=20,withgv;
 	float step=0.01;
 	FILE *fgmm,*fgv;
 	while(--argc>2)
@@ -443,13 +444,20 @@ int main(int argc,char **argv)
 						 case 'i':
 											ngvite=atoi(*++argv);
 											--argc;
+											break	;
+					 	 case 'G':
+											withgv=atoi(*++argv) ;
+											--argc;
 											break;
+
 						case 's':
 											step=atof(*++argv);
 											--argc;
 											break;
+
 						}
 	}
+	ngvite*=withgv;
 	GMM gmm;
 	gmm.gauss=(JGAUSS *)malloc(sizeof(JGAUSS)*M);
 	int m;
@@ -554,7 +562,8 @@ int main(int argc,char **argv)
 	double *curDelta=(double *)calloc(T*L/2,sizeof(double));
   double likli,pLikli=0.0,vLikli;
 	
-
+if(ngvite>0)
+{
 //	double cal_likli(int T,JGAUSS *gauss,FVECTOR *curMiu,GV *senSta)
 	for(iT=0;iT<T;iT++)
 	{
@@ -595,7 +604,7 @@ int main(int argc,char **argv)
 		{
 			cmcep.data[iT][l+1]=	sqrt(gv.miu.data[l]/senSta.var.data[l])*(cmcep.data[iT][l+1]-senSta.miu.data[l]) +senSta.miu.data[l];
 		}
-
+}
 
 double w1=1.0;///(double)order;
 double w2=1.0;
@@ -715,7 +724,7 @@ double w2=1.0;
 	}
 
 //} //end for l
-	printf("%s\n",*(argv+1));
+//	printf("%s\n",*(argv+1));
 	FILE *fcmcep=fopen(*++argv,"wb");
 	for (iT=0;iT<T;iT++)
 	{

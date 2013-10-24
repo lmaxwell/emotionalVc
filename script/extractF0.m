@@ -1,7 +1,7 @@
 emotion=strvcat('neutral' ,'happy', 'angry','sad')
 pdir=[pwd '/../'];
 plotFigures = 0; % If you do not need plots, set this variable 0.
-for jemotion=4:4%size(emotion,1)
+for jemotion=1:4%size(emotion,1)
  
     
 dir=[pdir  deblank(emotion(jemotion,:))];
@@ -16,8 +16,19 @@ mkdir([ dir '/logf0']);
 %         soundsc(x,fs) % Playback sound
 
         %  Extract source information
-        opt.f0ceil=500;
-        opt.f0floor=100;
+        if(jemotion==1)
+            opt.f0ceil=500;
+            opt.f0floor=90;
+        elseif(jemotion==2)
+              opt.f0ceil=500;
+            opt.f0floor=90;
+            elseif(jemotion==3)
+              opt.f0ceil=500;
+            opt.f0floor=90;
+            elseif(jemotion==4)
+              opt.f0ceil=500;
+            opt.f0floor=90;
+        end
         r = exF0candidatesTSTRAIGHTGB(x,fs,opt); % Extract F0 information
 
 

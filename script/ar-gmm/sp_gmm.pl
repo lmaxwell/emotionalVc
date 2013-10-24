@@ -3,7 +3,7 @@
 #
 #         FILE: sp_gmm.pl
 #
-#        USAGE: ./sp_gmm.pl  ../config/config.pm
+#        USAGE: ./sp_gmm.pl  ../config/config.pm  trgEmotion numMix mode
 #
 #  DESCRIPTION: 
 #
@@ -23,19 +23,48 @@ use warnings;
 use utf8;
 
 
+if($#ARGV<3)
+{
+	print "USAGE: ./sp_gmm.pl  ../config/config.pm  trgEmotion numMix mode";
+	exit;
+}
 
 
+my ($init,$init_mcep, $mcep, $doTrain, $doTest,$mode);
+$mode=$ARGV[3];
 
-my ($init,$init_mcep, $mcep, $doTrain, $doTest);
+if($mode eq 'init')
+{
 $init    = 1;
 $init_mcep=0;
-$mcep    = 1;
+$mcep    = 0;
+$doTrain = 0;
+$doTest  = 0;
+}
+elsif($mode eq 'train')
+{
+
+$init    = 0;
+$init_mcep=0;
+$mcep    = 0;
 $doTrain = 1;
 $doTest  = 0;
 
-my $numMix=128;
+}
+elsif($mode eq 'test')
+{
+
+$init    = 0;
+$init_mcep=0;
+$mcep    = 1;
+$doTrain = 1;
+$doTest  = 1;
+
+}
+
+my $numMix=$ARGV[2];
 my $src = 'neutral';
-my $trg = 'sad';
+my $trg = $ARGV[1];
 my $prjDir  = '..';
 my $workDir = "$prjDir/vc/train/to$trg"."_$numMix"."mix";
 my $testDir = "$workDir/test";
@@ -47,7 +76,7 @@ require("$prjDir/config/config.pm");
 
 #SPTK path
 my $SPTK = "/usr/local/SPTK/bin";
-
+my $SPTK36="/usr/local/SPTK-3.6/bin";
 if ($init)
 {
 	mkdir "$prjDir/vc/train",0755;
@@ -118,7 +147,7 @@ if ($init_mcep)
         $srcSP =~ /([0-9]+).sp/;
         print "extacting mcep from $srcSP\n";
         system(
-            "$SPTK/x2x +af $srcSP|$SPTK/mcep -a 0.42 -m 24 -l 1024 -q 3 |x2x +fd>$prjDir/vc/train/mcepc0/$src/$1.mcep"
+            "$SPTK/x2x +af $srcSP|$SPTK/mcep -a 0.42 -m 24 -l 1024 -q 4 |x2x +fd>$prjDir/vc/train/mcepc0/$src/$1.mcep"
         );
     }
     my @trgSPs = <$prjDir/$trg/spectrum/*.sp>;
@@ -127,7 +156,7 @@ if ($init_mcep)
         print "extracting mcep from $trgSP\n";
         $trgSP =~ /([0-9]+).sp/;
         system(
-            "$SPTK/x2x +af $trgSP|$SPTK/mcep -a 0.42 -m 24 -l 1024 -q 3 |x2x +fd>$prjDir/vc/train/mcepc0/$trg/$1.mcep"
+            "$SPTK/x2x +af $trgSP|$SPTK/mcep -a 0.42 -m 24 -l 1024 -q 4 |x2x +fd>$prjDir/vc/train/mcepc0/$trg/$1.mcep"
         );
     }
 
@@ -185,6 +214,12 @@ if ($doTest)
             "mv $workDir/wav/$src/$iFile.wav $testDir/wav/$src/$iFile.wav"
         );
     }
+ 	for my $iFile (@testfiles)
+    {
+        system(
+            "mv $workDir/mcepc0/$src/$iFile.mcep $testDir/wav/$src-$trg"."_$numMix"."mix/$iFile.wav.org.mcep"
+        );
+    }
 
    
     system("$prjDir/vc/scripts/VCTrain test $src $trg"."_$numMix"."mix");
@@ -192,8 +227,55 @@ if ($doTest)
     for my $iFile (@testfiles)
     {
         system(
-            "$SPTK/x2x +df $testDir/wav/$src-$trg"."_$numMix"."mix/$iFile.wav.conv.mcep|$SPTK/mgc2sp -a 0.42 -m 24 -l 1024 -o 2 |$SPTK/x2x +fa513> $testDir/wav/$src-$trg"."_$numMix"."mix/$iFile.sp "
+            "$SPTK/x2x +df $testDir/wav/$src-$trg"."_$numMix"."mix/$iFile.wav.conv.mcep|$SPTK/mgc2sp -a 0.42 -m 24 -l 1024 -o 3 |$SPTK/x2x +fa513> $testDir/wav/$src-$trg"."_$numMix"."mix/$iFile.sp "
         );
     }
+	
+	my $melCDdir="$testDir/melCD";
+	my $testSrc="$melCDdir/test$src.mat";
+	my $testTrg="$melCDdir/testConv.mat";
+	mkdir $melCDdir,0755;
+	system("rm -f $melCDdir/conv.data");
+	#system("rm -f $melCDdir/trg.data");
+	for my $iFile (@testfiles)
+	{
+		if($iFile eq '341')
+		{
+			next;
+		}
+
+		my $convFile="$testDir/wav/$src-$trg"."_$numMix"."mix/$iFile.wav.conv.mcep";
+		my $trgFile="$workDir/../mcepc0/$trg/$iFile.mcep";
+		system("$SPTK36/x2x +df  $convFile >$convFile.f");
+		system("$SPTK36/x2x +df  $trgFile >$trgFile.f");
+		my $convTemp="$melCDdir/convtemp";
+		my $trgTemp="$melCDdir/trgtemp";
+		system("$SPTK36/bcp +f -l 25 -s 1 -e 24 -L 24 -S 0 $convFile.f>$convTemp ");
+		system("$SPTK36/bcp +f -l 25 -s 1 -e 24 -L 24 -S 0 $trgFile.f>$trgTemp ");
+		my $nancheck=`$SPTK/nan $convTemp|wc -l`;
+		chomp $nancheck;
+		if($nancheck)
+		{
+			next;
+		}
+
+		my $nancheck=`$SPTK/nan $trgTemp|wc -l`;
+		chomp $nancheck;
+		if($nancheck)
+		{
+			next;
+		}
+		system("$SPTK36/dtw -l 24 -p 2 $convTemp $trgTemp>>$melCDdir/conv.data");
+
+	}
+
+	system("$SPTK36/bcp +f -l 48 -s 0 -e 23 -L 25 -S 1 $melCDdir/conv.data > $testSrc");
+	system("$SPTK36/bcp +f -l 48 -s 24 -e 47 -L 25 -S 1 $melCDdir/conv.data > $testTrg");
+	#system("$SPTK36/cdist -o 0 -m 24 $melCDdir/$src.mat $melCDdir/$trg.mat |x2x +fa >$melCDdir/melCD ");
+	system("$SPTK36/cdist -o 0 -m 24 $testSrc $testTrg|x2x +fa >$melCDdir/melCD_test ");
+
+
+
+
 }
 

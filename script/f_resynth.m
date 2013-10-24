@@ -13,7 +13,7 @@ directoryBase = [pwd '/../neutral/'];
 fileName = ['wav/' num2str(file) '.wav'];
 
 noisy = 0; % If the speech material consists of low frequency noise, set this vaviable 1;
-plotFigures = 0; % If you do not need plots, set this variable 0.
+plotFigures = 1; % If you do not need plots, set this variable 0.
 
 %%  Read speech data from a file
 

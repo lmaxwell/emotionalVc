@@ -1,4 +1,4 @@
-function f_conversion_ar( iFile,emotion,mixSp,orderSp,workDir )
+function f_conversion_ar( iFile,emotion,mixSp,orderSp,gv,workDir )
 %F_CONVERSION Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -87,7 +87,7 @@ for durConv=0:1
                 %%
                 if(spConv)
                 
-                SpectrumStructure.spectrogramSTRAIGHT=load([prjdir '/vc/train/to' emotion '_ar/test/' num2str(mixSp) '-mix' '/wav/convert-' num2str(orderSp) '/' num2str(iFile) '.sp' ])';
+                SpectrumStructure.spectrogramSTRAIGHT=load([prjdir '/vc/train/to' emotion '_ar/test/' num2str(mixSp) '-mix' '/wav/convert-' num2str(orderSp) '-g' num2str(gv) '/' num2str(iFile) '.sp' ])';
 
                 end
 
